@@ -1,3 +1,10 @@
 <resources>
-    <string name="app_name">Lab_4</string>
+    <string name="app_name">Lab4</string>
+    <string name="hint_enter_todo">Enter a todo...</string>
+    <string name="urgent">Urgent</string>
+    <string name="add">Add</string>
+    <string name="delete_title">Delete</string>
+    <string name="delete_message">Do you want to delete this item?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
 </resources>
