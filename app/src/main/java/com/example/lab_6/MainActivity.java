@@ -1,147 +1,155 @@
 package com.example.lab_6;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.util.Log;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.ListView;
+import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
-    ImageView imageView;
-    ProgressBar progressBar;
+    private ArrayList<JSONObject> characterList = new ArrayList<>();
+    private CharacterAdapter adapter;
+    private ListView listView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        imageView = findViewById(R.id.imageView);
-        progressBar = findViewById(R.id.progressBar);
+        listView = findViewById(R.id.characterListView);
+        adapter = new CharacterAdapter();
+        listView.setAdapter(adapter);
 
-        new CatImages().execute();
+        new FetchCharactersTask().execute();
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            try {
+                JSONObject character = characterList.get(position);
+
+                Bundle bundle = new Bundle();
+                bundle.putString("name", character.getString("name"));
+                bundle.putString("height", character.getString("height"));
+                bundle.putString("mass", character.getString("mass"));
+                bundle.putString("birth_year", character.getString("birth_year"));
+
+                // FrameLayout check
+                View frameLayout = findViewById(R.id.fragmentContainer);
+
+                if (frameLayout != null) {
+                    // TABLET: Fragment
+                    DetailsFragment fragment = new DetailsFragment();
+                    fragment.setArguments(bundle);
+
+                    getSupportFragmentManager()
+                            .beginTransaction()
+                            .replace(R.id.fragmentContainer, fragment)
+                            .commit();
+                } else {
+                    // Phone: EmptyActivity
+                    android.content.Intent intent = new android.content.Intent(MainActivity.this, EmptyActivity.class);
+                    intent.putExtras(bundle);
+                    startActivity(intent);
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
-    class CatImages extends AsyncTask<String, Integer, String> {
-
-        Bitmap currentBitmap = null;
+    //  AsyncTask: API
+    private class FetchCharactersTask extends AsyncTask<Void, Void, String> {
 
         @Override
-        protected String doInBackground(String... params) {
-            while (true) {
-                try {
-                    // Step 1: Fetch JSON from API
-                    String jsonResponse = fetchUrl("https://cataas.com/cat?json=true");
-                    Log.d("CatAPI", "Response: " + jsonResponse);
-
-                    if (jsonResponse == null) {
-                        Thread.sleep(2000);
-                        continue;
-                    }
-
-                    // Step 2: Parse JSON — try both "id" and "_id"
-                    JSONObject json = new JSONObject(jsonResponse);
-                    Log.d("CatAPI", "Keys: " + json.toString());
-
-                    String id = null;
-                    if (json.has("_id")) {
-                        id = json.getString("_id");
-                    } else if (json.has("id")) {
-                        id = json.getString("id");
-                    }
-
-                    if (id == null) {
-                        Log.e("CatAPI", "No id found in JSON: " + jsonResponse);
-                        Thread.sleep(2000);
-                        continue;
-                    }
-
-                    Log.d("CatAPI", "Cat ID: " + id);
-
-                    // Step 3: Check if file already exists locally
-                    File file = new File(getFilesDir(), id + ".jpg");
-
-                    if (file.exists()) {
-                        // Load from local storage
-                        Log.d("CatAPI", "Loading from local file: " + file.getAbsolutePath());
-                        currentBitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
-                    } else {
-                        // Download and save image
-                        String imageUrl = "https://cataas.com/cat/" + id;
-                        Log.d("CatAPI", "Downloading: " + imageUrl);
-
-                        URL imgUrl = new URL(imageUrl);
-                        HttpURLConnection imgConn = (HttpURLConnection) imgUrl.openConnection();
-                        imgConn.setConnectTimeout(8000);
-                        imgConn.setReadTimeout(15000);
-                        imgConn.setInstanceFollowRedirects(true);
-
-                        InputStream imgStream = imgConn.getInputStream();
-                        FileOutputStream fos = new FileOutputStream(file);
-                        byte[] buffer = new byte[4096];
-                        int bytesRead;
-                        while ((bytesRead = imgStream.read(buffer)) != -1) {
-                            fos.write(buffer, 0, bytesRead);
-                        }
-                        fos.close();
-                        imgStream.close();
-
-                        currentBitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
-                        Log.d("CatAPI", "Download complete, bitmap: " + currentBitmap);
-                    }
-
-                    // Step 4: Progress bar countdown (~3 seconds)
-                    for (int i = 0; i < 100; i++) {
-                        publishProgress(i);
-                        Thread.sleep(30);
-                    }
-
-                } catch (Exception e) {
-                    Log.e("CatAPI", "Error: " + e.getMessage());
-                    try { Thread.sleep(2000); } catch (Exception ignored) {}
-                }
-            }
-        }
-
-        // Helper method to fetch a URL as a String
-        private String fetchUrl(String urlString) {
+        protected String doInBackground(Void... voids) {
             try {
-                URL url = new URL(urlString);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(8000);
-                conn.setReadTimeout(8000);
+                URL url = new URL("https://swapi.dev/api/people/?format=json");
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
 
-                InputStream stream = conn.getInputStream();
-                StringBuilder sb = new StringBuilder();
-                int ch;
-                while ((ch = stream.read()) != -1) sb.append((char) ch);
-                stream.close();
-                return sb.toString();
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream()));
+                StringBuilder result = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    result.append(line);
+                }
+                reader.close();
+                return result.toString();
+
             } catch (Exception e) {
-                Log.e("CatAPI", "fetchUrl error: " + e.getMessage());
+                e.printStackTrace();
                 return null;
             }
         }
 
         @Override
-        protected void onProgressUpdate(Integer... values) {
-            progressBar.setProgress(values[0]);
-
-            // Show the new cat image at the START of each cycle
-            if (values[0] == 1 && currentBitmap != null) {
-                imageView.setImageBitmap(currentBitmap);
+        protected void onPostExecute(String responseText) {
+            if (responseText != null) {
+                try {
+                    JSONArray characters = new JSONObject(responseText).getJSONArray("results");
+                    for (int i = 0; i < characters.length(); i++) {
+                        characterList.add(characters.getJSONObject(i));
+                    }
+                    adapter.notifyDataSetChanged();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
+
+    //  BaseAdapter: ListView'
+    private class CharacterAdapter extends BaseAdapter {
+
+        @Override
+        public int getCount() {
+            return characterList.size();
+        }
+
+        @Override
+        public JSONObject getItem(int position) {
+            return characterList.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            TextView textView;
+            if (convertView == null) {
+                textView = new TextView(MainActivity.this);
+                textView.setTextSize(20);
+                textView.setPadding(16, 16, 16, 16);
+            } else {
+                textView = (TextView) convertView;
+            }
+
+            try {
+                String name = getItem(position).getString("name");
+                textView.setText(name);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            return textView;
+        }
+    }
 }
+
