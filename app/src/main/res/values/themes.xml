@@ -8,5 +8,7 @@
         <item name="colorSecondaryVariant">#018786</item>
         <item name="colorOnSecondary">#000000</item>
         <item name="android:statusBarColor">#3700B3</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
     </style>
 </resources>
